@@ -20,7 +20,6 @@ const (
 	entryDebit = "DEBIT"
 	entryCredit = "CREDIT"
 )
-
 type TransferRepository struct {
 	pool *pgxpool.Pool
 }
