@@ -33,7 +33,7 @@ var	ErrorInvalidType = errors.New("Invalid account type")
 var ErrorAccountDuplicate = errors.New("Account duplicate")
 var ErrorSelfTransfer = errors.New("Cannot transfer to the same account")
 var ErrorCurrencyMismatch = errors.New("Accounts must have the same currency")
-
+var ErrorIdempotencyKeyDuplicate = errors.New("Idempotency key duplicate")
 
 func NewAccount (ownerId uuid.UUID, currency string , accountType string) (*Account, error) {
 	if ownerId == uuid.Nil {

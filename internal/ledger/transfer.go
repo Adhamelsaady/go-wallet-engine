@@ -9,6 +9,8 @@ type TransferParams struct {
 	Amount int64 
 	Currency string
 	Description string
+	IdempotencyKey string
+	RequestFingerPrint string
 }
 
 type TransferResponse struct {
