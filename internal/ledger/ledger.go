@@ -24,6 +24,32 @@ type LedgerEntry struct {
 	CreatedAt time.Time `json:"time"` 
 }
 
+type EntryFilter {
+	AccountId uuid.UUID
+	EntryType *EntryType
+	Limit int
+	Offset int
+}
+
+type PagedResult struct {
+	Entries []LedgerEntry `json:"entries"`
+	Total int `json:"total"`
+	Limit int `json:"limit"`
+	Offset int `json:"offset"`
+}
+
+type TransactionDetail struct {
+	Id uuid.UUID `json:"id"`
+	IdempotencyKey string `json:"idempotency_key"`
+	RefrenceType string `json:"reference_type"`
+	Description string `json:"description"`
+	RequestFingerPrint *string `json:"request_fingerprint,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	Status string `json:"status"`
+	Entries []LedgerEntry `json:"entries"`
+}
+
+
 func CalculateBalance(entries []LedgerEntry) int64 {
 	var balance int64 = 0
 	for _, entry := range entries {
