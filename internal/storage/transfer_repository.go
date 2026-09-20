@@ -93,22 +93,22 @@ func (r *TransferRepository) ExecuteTransfer(ctx context.Context, transferParams
 	}
 	transactionId := uuid.New()
 	curTime := time.Now().UTC()
-	if err := createTransactionByIdempotencyKey(ctx , transaction , transactionId , transferParams.Description , transferParams.IdempotencyKey , transferParams.RequestFingerPrint , curTime); err != nil {
-		return nil, err
-	}
-
-	if err != nil{
+	err = createTransactionByIdempotencyKey(ctx, transaction, transactionId, transferParams.Description, transferParams.IdempotencyKey, transferParams.RequestFingerPrint, curTime)
+	if err != nil {
 		var pgxError *pgconn.PgError
 		if errors.As(err, &pgxError) && pgxError.Code == "23505" {
-			existing , fetchErr := r.findByIdempotencyKey(ctx , transferParams.IdempotencyKey)
+			_ = transaction.Rollback(ctx)
+			existing, fetchErr := r.findByIdempotencyKey(ctx, transferParams.IdempotencyKey)
 			if fetchErr != nil || existing == nil {
-				return nil , fmt.Errorf("concurrent idempotency collision recovery failed : %w" , err)
+				return nil, fmt.Errorf("concurrent idempotency collision recovery failed: %w", err)
 			}
-			return existing.toTransferResponse() , nil // return the existing one
+			if existing.RequestFingerprint != transferParams.RequestFingerPrint {
+				return nil, ledger.ErrorIdempotencyKeyDuplicate
+			}
+			return existing.toTransferResponse(), nil
 		}
-		return nil , err
+		return nil, err
 	}
-
 	if err := createLedgerEntry(ctx , transaction , transactionId, transferParams.FromAccountId , transferParams.Amount , entryDebit , curTime); err != nil {
 		return nil, err
 	}
