@@ -23,3 +23,10 @@ type TransferResponse struct {
 	Status string `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+func LockOrder (aId, bId uuid.UUID) (first , second uuid.UUID) {
+	if aId.String() < bId.String() {
+		return aId, bId
+	}
+	return bId, aId
+}

@@ -228,10 +228,7 @@ func (r *TransferRepository) findByIdempotencyKey (ctx context.Context , key str
 }
 
 func (r *TransferRepository) lockAccountsInOrder (ctx context.Context , tx pgx.Tx , fromId uuid.UUID , toId uuid.UUID) (*ledger.Account , *ledger.Account , error) {
-	firstId , secondId := fromId , toId
-	if firstId.String() > secondId.String() {
-		firstId, secondId = toId, fromId
-	}
+	firstId , secondId := ledger.LockOrder(fromId , toId)
 	firstAcc , err := getAccountById(ctx , tx , firstId)
 	if err != nil {
 		return nil , nil , err
