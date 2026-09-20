@@ -102,3 +102,47 @@ func TestCreateTransfer_Validation(t *testing.T) {
 		})
 	}
 }
+
+
+func TestLockOrder(t *testing.T) {
+	id1 := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	id2 := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	tests := []struct {
+		name string
+		idA uuid.UUID
+		idB uuid.UUID
+		wantFirst uuid.UUID
+		wantSecond uuid.UUID
+	}{
+		{
+			name: "already in order (idA < idB)",
+			idA: id1,
+			idB: id2,
+			wantFirst: id1,
+			wantSecond: id2,
+		},
+		{
+			name: "reverse order (idA > idB) gets flipped",
+			idA: id2,
+			idB: id1,
+			wantFirst: id1,
+			wantSecond: id2,
+		},
+		{
+			name: "identical IDs return same order",
+			idA: id1,
+			idB: id1,
+			wantFirst: id1,
+			wantSecond: id1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			first, second := LockOrder(tc.idA, tc.idB)
+			assert.Equal(t, tc.wantFirst, first)
+			assert.Equal(t, tc.wantSecond, second)
+		})
+	}
+}
+
