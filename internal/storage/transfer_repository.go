@@ -220,7 +220,7 @@ func (r *TransferRepository) findByIdempotencyKey (ctx context.Context , key str
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ledger.ErrorIdempotencyKeyDuplicate
+			return nil, nil
 		}
 		return nil, fmt.Errorf("find by idempotency key: %w", err)
 	}
