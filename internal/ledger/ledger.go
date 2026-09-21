@@ -14,6 +14,7 @@ const (
 
 var ErrorInvalidAmount = errors.New("Invalid amount")
 var ErrorInvalidEntryType = errors.New("Invalid entry type")
+var ErrorTransactionNotFound = errors.New("transaction not found")
 
 type LedgerEntry struct {
 	ID uuid.UUID `json:"id"`

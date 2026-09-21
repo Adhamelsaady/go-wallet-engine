@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
+var ErrorTransactionNotFound = errors.New("transaction not found")
 const (
 	referenceTransfer = "TRANSFER"
 	statusCompleted = "COMPLETED"
@@ -130,6 +130,86 @@ func (r *TransferRepository) ExecuteTransfer(ctx context.Context, transferParams
 	},nil
 
 }
+func (r *TransferRepository) findByIdempotencyKey (ctx context.Context , key string) (*storedTransaction , error) {
+	const query = `SELECT t.id, debit_entry.account_id AS from_account_id, credit_entry.account_id AS to_account_id, debit_entry.amount, a.currency, COALESCE(t.description, ''), t.status, COALESCE(t.request_fingerprint, ''), t.created_at
+				   FROM transactions t JOIN ledger_entries debit_entry 
+				   ON debit_entry.transaction_id = t.id AND debit_entry.entry_type = 'DEBIT'
+				   JOIN ledger_entries credit_entry ON credit_entry.transaction_id = t.id AND credit_entry.entry_type = 'CREDIT'
+				   JOIN accounts a ON a.id = debit_entry.account_id
+				   WHERE t.idempotency_key = $1`
+	var stored storedTransaction
+	err := r.pool.QueryRow(ctx,query,key).Scan(
+		&stored.TransactionID,
+		&stored.FromAccountID,
+		&stored.ToAccountID,
+		&stored.Amount,
+		&stored.Currency,
+		&stored.Description,
+		&stored.Status,
+		&stored.RequestFingerprint,
+		&stored.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find by idempotency key: %w", err)
+	}
+	return &stored, nil
+}
+
+func (r *TransferRepository) lockAccountsInOrder (ctx context.Context , tx pgx.Tx , fromId uuid.UUID , toId uuid.UUID) (*ledger.Account , *ledger.Account , error) {
+	firstId , secondId := ledger.LockOrder(fromId , toId)
+	firstAcc , err := getAccountById(ctx , tx , firstId)
+	if err != nil {
+		return nil , nil , err
+	}
+	secondAcc , err := getAccountById(ctx , tx , secondId)
+	if err != nil {
+		return nil , nil , err
+	}
+	if fromId == firstAcc.ID {
+		return firstAcc , secondAcc , nil
+	}
+	return secondAcc , firstAcc , nil
+}
+
+func (r *TransferRepository) GetTransactionDetails(ctx context.Context , id uuid.UUID) (*ledger.TransactionDetail , error) {
+	query := `
+		SELECT id, idempotency_key, reference_type, COALESCE(description, ''), status, request_fingerprint, created_at
+		FROM transactions
+		WHERE id = $1`
+	var detail ledger.TransactionDetail
+	err := r.pool.QueryRow(ctx , query , id).Scan(
+		&detail.Id , &detail.IdempotencyKey , &detail.RefrenceType , &detail.Description ,&detail.Status , &detail.RequestFingerPrint ,  &detail.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ledger.ErrorTransactionNotFound
+		}
+		return nil, fmt.Errorf("storage: get transaction %s: %w", id, err)
+	}
+
+	query = `SELECT id, transaction_id, account_id, amount, entry_type, created_at
+		FROM ledger_entries
+		WHERE transaction_id = $1
+		ORDER BY created_at ASC`
+	rows , err := r.pool.Query(ctx , query , id)
+	if err != nil {
+		return nil , fmt.Errorf("query transaction details %w : " ,  err)
+	}
+	defer rows.Close()
+	detail.Entries = make([]ledger.LedgerEntry, 0)
+	for rows.Next() {
+		var entry ledger.LedgerEntry
+		err := rows.Scan(&entry.ID, &entry.TransactionId, &entry.AccountId, &entry.Amount, &entry.EntryType, &entry.CreatedAt)
+		if err != nil {
+			return nil , fmt.Errorf("scan transaction entry %w: " , err)
+		}
+		detail.Entries = append(detail.Entries, entry)
+	}
+	return &detail, nil
+}
+
 func getAccountById (ctx context.Context , transaction pgx.Tx , id uuid.UUID) (*ledger.Account , error) {
 	query := `SELECT id, owner_id, currency, type, created_at, updated_at FROM accounts WHERE id = $1 FOR UPDATE`
 	var account ledger.Account
@@ -154,6 +234,7 @@ func getAccountById (ctx context.Context , transaction pgx.Tx , id uuid.UUID) (*
 	}
 	return &account, nil
 }
+
 func validateTransfer(from *ledger.Account,to *ledger.Account,amount int64) error {
 	if from.ID == to.ID {
 		return ledger.ErrorSelfTransfer
@@ -199,49 +280,6 @@ func createLedgerEntry(ctx context.Context, tx pgx.Tx, transactionID uuid.UUID, 
 	return nil
 }
 
-func (r *TransferRepository) findByIdempotencyKey (ctx context.Context , key string) (*storedTransaction , error) {
-	const query = `SELECT t.id, debit_entry.account_id AS from_account_id, credit_entry.account_id AS to_account_id, debit_entry.amount, a.currency, COALESCE(t.description, ''), t.status, COALESCE(t.request_fingerprint, ''), t.created_at
-				   FROM transactions t JOIN ledger_entries debit_entry 
-				   ON debit_entry.transaction_id = t.id AND debit_entry.entry_type = 'DEBIT'
-				   JOIN ledger_entries credit_entry ON credit_entry.transaction_id = t.id AND credit_entry.entry_type = 'CREDIT'
-				   JOIN accounts a ON a.id = debit_entry.account_id
-				   WHERE t.idempotency_key = $1`
-	var stored storedTransaction
-	err := r.pool.QueryRow(ctx,query,key).Scan(
-		&stored.TransactionID,
-		&stored.FromAccountID,
-		&stored.ToAccountID,
-		&stored.Amount,
-		&stored.Currency,
-		&stored.Description,
-		&stored.Status,
-		&stored.RequestFingerprint,
-		&stored.CreatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("find by idempotency key: %w", err)
-	}
-	return &stored, nil
-}
-
-func (r *TransferRepository) lockAccountsInOrder (ctx context.Context , tx pgx.Tx , fromId uuid.UUID , toId uuid.UUID) (*ledger.Account , *ledger.Account , error) {
-	firstId , secondId := ledger.LockOrder(fromId , toId)
-	firstAcc , err := getAccountById(ctx , tx , firstId)
-	if err != nil {
-		return nil , nil , err
-	}
-	secondAcc , err := getAccountById(ctx , tx , secondId)
-	if err != nil {
-		return nil , nil , err
-	}
-	if fromId == firstAcc.ID {
-		return firstAcc , secondAcc , nil
-	}
-	return secondAcc , firstAcc , nil
-}
 
 func  createTransactionByIdempotencyKey(ctx context.Context , tx pgx.Tx , transctionId uuid.UUID , description string , idempotencyKey string , requestFingerprint string , createdAt time.Time ) error {
 	const query = `INSERT INTO transactions(id , reference_type , description , status , idempotency_key , request_fingerprint , created_at) 

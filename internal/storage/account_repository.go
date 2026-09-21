@@ -3,8 +3,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
-
 	"github.com/adhamelsaady/digital-wallet/internal/ledger"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
