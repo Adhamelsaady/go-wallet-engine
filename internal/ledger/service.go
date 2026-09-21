@@ -61,7 +61,7 @@ func (s *Service) CreateTransfer (ctx context.Context, params TransferParams) (*
 	return result, nil
 }
 
-func (s *Service) GetAccountEntries (ctx context.Context, accountId uuid.UUID , filter EntryFilter) (*PagedResult , error) {
+func (s *Service) GetAccountEntries (ctx context.Context, filter EntryFilter) (*PagedResult , error) {
 	if _, err := s.accountRepository.GetAccountById(ctx, filter.AccountId); err != nil {
 		return nil, err
 	}

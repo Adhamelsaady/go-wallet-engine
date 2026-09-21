@@ -32,7 +32,8 @@ func main() {
 	ledgerService := ledger.NewService(accountRepository , transferRepository)
 	accountHandler := api.NewAccountHandler(accountRepository , ledgerService)
 	transferHandler := api.NewTransferHandler(ledgerService)
-	router := api.NewRouter(accountHandler, transferHandler)
+	adminHandler := api.NewAdminHandler(ledgerService)
+	router := api.NewRouter(accountHandler, transferHandler , adminHandler , cfg.AdminApiKey)
 	addr := cfg.ServerPort
 	if addr != "" && addr[0] != ':' {
 		addr = ":" + addr

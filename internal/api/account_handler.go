@@ -129,7 +129,7 @@ func (accountHandler *AccountHandler) GetEntries (writer http.ResponseWriter , r
 		Limit: limit,
 		Offset: offset,
 	}
-	result, err := accountHandler.accountRepository.GetAccountEntries(request.Context(), filter)
+	result, err := accountHandler.ledgerService.GetAccountEntries(request.Context(), filter)
 	if err != nil {
 		if errors.Is(err, ledger.ErrorAccountNotFound) {
 			writeError(writer, http.StatusNotFound, err.Error())
