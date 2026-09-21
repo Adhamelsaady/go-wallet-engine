@@ -10,10 +10,12 @@ import (
 type AccountStore interface {
 	GetAccountById(ctx context.Context, accountId uuid.UUID) (*Account, error)
 	CalculateBalance(ctx context.Context, accountId uuid.UUID) (int64, error)
+	GetAccountEntries (ctx context.Context , filter EntryFilter) (*PagedResult , error)
 }
 
 type TransferStore interface {
 	ExecuteTransfer(ctx context.Context, params TransferParams) (*TransferResponse, error)
+	GetTransactionDetails (ctx context.Context , id uuid.UUID) (*TransactionDetail , error)
 }
 
 type AdminStore interface {
@@ -21,7 +23,7 @@ type AdminStore interface {
 }
 
 type HistoryStore interface {
-	GetTransactionHistory(ctx context.Context , id uuid.UUID) (*TransactionDetail, error)
+	GetTransactionDetails(ctx context.Context , id uuid.UUID) (*TransactionDetail, error)
 }
 
 type Service struct {
@@ -57,4 +59,24 @@ func (s *Service) CreateTransfer (ctx context.Context, params TransferParams) (*
 		return nil , fmt.Errorf("ledger.Service: %w", err)
 	}
 	return result, nil
+}
+
+func (s *Service) GetAccountEntries (ctx context.Context, accountId uuid.UUID , filter EntryFilter) (*PagedResult , error) {
+	if _, err := s.accountRepository.GetAccountById(ctx, filter.AccountId); err != nil {
+		return nil, err
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100 
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+	return s.accountRepository.GetAccountEntries(ctx, filter)
+}
+
+func (s *Service) GetTransactionDetails (ctx context.Context, id uuid.UUID) (*TransactionDetail , error) {
+	return s.transferRepository.GetTransactionDetails(ctx, id)
 }

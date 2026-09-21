@@ -17,6 +17,9 @@ func (m *mockAccountStore) GetAccountById(_ context.Context, _ uuid.UUID) (*Acco
 func (m *mockAccountStore) CalculateBalance(_ context.Context, _ uuid.UUID) (int64, error) {
 	return 0, nil
 }
+func (m *mockAccountStore) GetAccountEntries(_ context.Context, _ EntryFilter) (*PagedResult, error) {
+	return &PagedResult{}, nil
+}
 
 type mockTransferStore struct {
 	called bool
@@ -33,6 +36,11 @@ func (m *mockTransferStore) ExecuteTransfer(_ context.Context, params TransferPa
 		Status: "COMPLETED",
 	}, nil
 }
+
+func (m *mockTransferStore) GetTransactionDetails(_ context.Context, _ uuid.UUID) (*TransactionDetail, error) {
+	return &TransactionDetail{}, nil
+}
+
 
 func TestCreateTransfer_Validation(t *testing.T) {
 	tests := []struct {

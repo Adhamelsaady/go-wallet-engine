@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/adhamelsaady/digital-wallet/internal/ledger"
 	"github.com/adhamelsaady/digital-wallet/internal/storage"
@@ -83,4 +85,58 @@ func (accountHandler *AccountHandler) GetBalance (writer http.ResponseWriter , r
 	}
 	writeJSON(writer, http.StatusOK, response)
 
+}
+
+func (accountHandler *AccountHandler) GetEntries (writer http.ResponseWriter , request *http.Request) {
+	idStr := chi.URLParam(request , "id")
+	accountId , err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid account ID")
+		return
+	}
+	query := request.URL.Query()
+
+	limit := 20
+	if limitStr := query.Get("limit"); limitStr != "" {
+		if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
+			limit = val
+		}
+	}
+	offset := 0
+	if offsetStr := query.Get("offset"); offsetStr != "" {
+		if val, err := strconv.Atoi(offsetStr); err == nil && val >= 0 {
+			offset = val
+		}
+	}
+
+	var entryType *ledger.EntryType
+	if entryTypeStr := strings.ToUpper(strings.TrimSpace(query.Get("entry_type"))); entryTypeStr != "" {
+		switch entryTypeStr {
+		case string(ledger.EntryTypeCredit):
+			e := ledger.EntryTypeCredit
+			entryType = &e
+		case string(ledger.EntryTypeDebit):
+			e := ledger.EntryTypeDebit
+			entryType = &e
+		default:
+			writeError(writer, http.StatusBadRequest, "invalid entry_type: must be DEBIT or CREDIT")
+			return
+		}
+	}
+	filter := ledger.EntryFilter{
+		AccountId: accountId,
+		EntryType: entryType,
+		Limit: limit,
+		Offset: offset,
+	}
+	result, err := accountHandler.accountRepository.GetAccountEntries(request.Context(), filter)
+	if err != nil {
+		if errors.Is(err, ledger.ErrorAccountNotFound) {
+			writeError(writer, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "failed to query entries")
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
 }
