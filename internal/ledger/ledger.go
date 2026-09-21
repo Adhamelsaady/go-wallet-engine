@@ -24,7 +24,7 @@ type LedgerEntry struct {
 	CreatedAt time.Time `json:"time"` 
 }
 
-type EntryFilter {
+type EntryFilter struct{
 	AccountId uuid.UUID
 	EntryType *EntryType
 	Limit int

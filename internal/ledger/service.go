@@ -16,6 +16,14 @@ type TransferStore interface {
 	ExecuteTransfer(ctx context.Context, params TransferParams) (*TransferResponse, error)
 }
 
+type AdminStore interface {
+	GetAccountEntries (ctx context.Context , filter EntryFilter) (*PagedResult , error)
+}
+
+type HistoryStore interface {
+	GetTransactionHistory(ctx context.Context , id uuid.UUID) (*TransactionDetail, error)
+}
+
 type Service struct {
 	accountRepository AccountStore
 	transferRepository TransferStore
