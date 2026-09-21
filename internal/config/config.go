@@ -8,6 +8,7 @@ import (
 type Config struct {
 	DatabaseURL string
 	ServerPort  string
+	AdminApiKey string
 }
 
 func Load () (*Config , error) {
@@ -19,8 +20,14 @@ func Load () (*Config , error) {
 	if ServerPort == "" {
 		ServerPort = ":8080"
 	}
+	AdminApiKey := os.Getenv("ADMIN_API_KEY")
+	if AdminApiKey == "" {
+		return nil , fmt.Errorf("ADMIN_API_KEY enviroment variable is required")
+	}
 	return &Config{
 		DatabaseURL: DatabaseURL,
 		ServerPort:  ServerPort,
+		AdminApiKey: AdminApiKey,
 	 }, nil
 }
+
