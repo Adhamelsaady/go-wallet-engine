@@ -1,9 +1,9 @@
 package storage
-
 import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/adhamelsaady/digital-wallet/internal/ledger"
 	"github.com/google/uuid"
@@ -70,4 +70,48 @@ func (r *AccountRepository) CalculateBalance(ctx context.Context, accountId uuid
 		return 0, fmt.Errorf("storage: failed to calculate balance for account %s: %w", accountId, err)
 	}
 	return balance, nil
+}
+
+func (r *AccountRepository) GetAccountEntries (ctx context.Context , filter ledger.EntryFilter) (*ledger.PagedResult , error) {
+	query := `SELECT id , transaction_id , account_id , amount , entry_type , created_at , COUNT(*) OVER () AS total_count
+			FROM ledger_entries WHERE account_id = $1 `
+	args := []any{filter.AccountId}
+	argIdx := 2
+	if filter.EntryType != nil {
+		query += fmt.Sprintf(" AND entry_type = $%d" , argIdx)
+		args = append(args, string(*filter.EntryType))
+		argIdx++
+	}
+
+	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	args = append(args, filter.Limit, filter.Offset)
+	
+	rows , err := r.pool.Query(ctx , query , args...)
+	if err != nil {
+		return nil , fmt.Errorf("query account entries %w", err)
+	}
+	defer rows.Close()
+
+	entries := make([]ledger.LedgerEntry, 0, filter.Limit)
+	total := 0
+
+	for rows.Next() {
+		var entry ledger.LedgerEntry
+		var totalCount int
+		err := rows.Scan(&entry.ID , &entry.TransactionId , &entry.AccountId , &entry.Amount , &entry.EntryType ,&entry.CreatedAt , &totalCount)
+		if err != nil {
+			return nil , fmt.Errorf("query account entries scan %w" , err)
+		}
+		entries = append(entries , entry)
+		total = totalCount
+	}
+	if err := rows.Err(); err != nil {
+		return nil , fmt.Errorf("row iteration : %w" , err)
+	}
+	return &ledger.PagedResult {
+		Entries: entries,
+		Total: total,
+		Limit: filter.Limit,
+		Offset: filter.Offset,
+	} , nil
 }
